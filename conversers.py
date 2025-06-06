@@ -1,5 +1,5 @@
 from common import get_api_key, conv_template, extract_json
-from language_models import APILiteLLM
+from language_models import APILiteLLM, AirSimModel # ry added
 from config import FASTCHAT_TEMPLATE_NAMES, Model
 
 
@@ -22,7 +22,7 @@ def load_attack_and_target_models(args):
     return attackLM, targetLM
 
 def load_indiv_model(model_name, local = False, use_jailbreakbench=True):
-    if use_jailbreakbench: 
+    if use_jailbreakbench and Model(model_name) != Model.airsim: # ry added
         if local:
             from jailbreakbench import LLMvLLM
             lm = LLMvLLM(model_name=model_name)
@@ -34,7 +34,10 @@ def load_indiv_model(model_name, local = False, use_jailbreakbench=True):
         if local:
             raise NotImplementedError
         else:
-            lm = APILiteLLM(model_name)
+            if Model(model_name) == Model.airsim: # ry added
+                lm = AirSimModel(model_name)# ry added
+            else:# ry added
+                lm = APILiteLLM(model_name)
     return lm
 
 class AttackLM():
@@ -186,17 +189,25 @@ class TargetLM():
                                 max_new_tokens=self.max_n_tokens)
             responses = llm_response.responses
         else:
-            batchsize = len(prompts_list)
-            convs_list = [conv_template(self.template) for _ in range(batchsize)]
-            full_prompts = []
-            for conv, prompt in zip(convs_list, prompts_list):
-                conv.append_message(conv.roles[0], prompt)
-                full_prompts.append(conv.to_openai_api_messages())
+            # ry added start
+            if Model(self.model_name) == Model.airsim:
+                responses = []
+                for prompt in prompts_list:
+                    response = self.model.generate_response(prompt)
+                    responses.append(response)
+            else:
+            #ry added done
+                batchsize = len(prompts_list)
+                convs_list = [conv_template(self.template) for _ in range(batchsize)]
+                full_prompts = []
+                for conv, prompt in zip(convs_list, prompts_list):
+                    conv.append_message(conv.roles[0], prompt)
+                    full_prompts.append(conv.to_openai_api_messages())
 
-            responses = self.model.batched_generate(full_prompts, 
-                                                            max_n_tokens = self.max_n_tokens,  
-                                                            temperature = self.temperature,
-                                                            top_p = self.top_p
-                                                        )
-           
+                responses = self.model.batched_generate(full_prompts, 
+                                                                max_n_tokens = self.max_n_tokens,  
+                                                                temperature = self.temperature,
+                                                                top_p = self.top_p
+                                                            )
+            
         return responses

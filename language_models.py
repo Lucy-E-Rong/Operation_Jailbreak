@@ -3,6 +3,7 @@ import litellm
 from config import TOGETHER_MODEL_NAMES, LITELLM_TEMPLATES, API_KEY_NAMES, Model
 from loggers import logger
 from common import get_api_key
+#from litellm import APIError
 
 class LanguageModel():
     def __init__(self, model_name):
@@ -84,10 +85,33 @@ class APILiteLLM(LanguageModel):
             seed=0,
             stop=eos_tokens,
         )
-        
         responses = [output["choices"][0]["message"].content for output in outputs]
 
         return responses
+    '''
+    def batched_generate(self, convs_list: list[list[dict]], max_n_tokens: int, temperature: float, top_p: float, extra_eos_tokens: list[str] = None) -> list[str]:
+        eos_tokens = self.eos_tokens  # 使用类中定义的 eos_tokens
+        if extra_eos_tokens:
+            eos_tokens.extend(extra_eos_tokens)
+
+        try:
+            outputs = litellm.batch_completion(
+                model=self.litellm_model_name,
+                messages=convs_list,
+                api_key=self.api_key,
+                temperature=temperature,
+                top_p=top_p,
+                max_tokens=max_n_tokens,
+                num_retries=self.API_MAX_RETRY,
+                seed=0,
+                stop=eos_tokens,  # 使用 eos_tokens
+            )
+            responses = [output["choices"][0]["message"].content for output in outputs]
+            return responses
+        except APIError as e:
+            logger.error(f"APIError: {e}")
+            return ["APIError: Failed to generate response."] * len(convs_list)   
+    '''
 
 # class LocalvLLM(LanguageModel):
     
@@ -137,7 +161,21 @@ class APILiteLLM(LanguageModel):
     
 
 
+from chatgpt_airsim.airsim_gpt_demo import request_single_step
 
+class AirSimModel(LanguageModel):
+    def __init__(self, model_name):
+        super().__init__(model_name)
+        self.model_name = model_name
 
+    def batched_generate(self, convs_list: list[list[dict]], max_n_tokens: int, temperature: float, top_p: float, extra_eos_tokens: list[str] = None) -> list[str]:
+        responses = []
+        for conv in convs_list:
+            user_input = conv[-1]["content"] if conv else ""
+            response = self._generate_response(user_input)
+            responses.append(response)
+        return responses
 
-
+    def _generate_response(self, prompt: str) -> str:
+        # 调用 airsim_gpt_demo.py 的逻辑
+        return request_single_step(prompt, self.model_name)

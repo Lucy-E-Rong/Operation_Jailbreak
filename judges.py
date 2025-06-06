@@ -35,7 +35,34 @@ class JudgeBase:
 
     def score(self, prompt_list, response_list):
         raise NotImplementedError
-
+    #ry added for judge classes to process the raw output from the judge model
+    def process_output(self, raw_output):
+        # 修改后的正则表达式，同时匹配评分和理由
+        pattern = r'\[\[(\d+)\]\]\s*-\s*(.*)'
+        match = re.search(pattern, raw_output)
+        if match:
+            output = {
+                'score': int(match.group(1)),
+                'reason': match.group(2).strip()
+            }
+        else:
+            # 如果无法解析，尝试只匹配评分
+            score_pattern = r'\[\[(\d+)\]\]'
+            score_match = re.search(score_pattern, raw_output)
+            if score_match:
+                output = {
+                    'score': int(score_match.group(1)),
+                    'reason': "No reason provided"
+                }
+            else:
+                logger.warning(f"Error in processing judge output: {raw_output}")
+                output = {
+                    'score': 1,
+                    'reason': "Failed to parse judge output"
+                }
+        return output
+    #ry added end
+    '''
     def process_output(self, raw_output):
         pattern = r'\[\[(\d+)\]\]'
         match = re.search(pattern, raw_output)
@@ -44,7 +71,7 @@ class JudgeBase:
             logger.warning(f"Error in processing judge output: {raw_output}" )
             output = 1
         return output
-               
+     '''          
 class NoJudge(JudgeBase):
     def __init__(self, args):
         super(NoJudge, self).__init__(args)

@@ -60,114 +60,91 @@ class APILiteLLM(LanguageModel):
             self.post_message = ""
         
     
-    
     def batched_generate(self, convs_list: list[list[dict]], 
                          max_n_tokens: int, 
                          temperature: float, 
                          top_p: float,
                          extra_eos_tokens: list[str] = None) -> list[str]: 
         
-        eos_tokens = self.eos_tokens 
+        eos_tokens = list(self.eos_tokens)
 
         if extra_eos_tokens:
             eos_tokens.extend(extra_eos_tokens)
         if self.use_open_source_model:
             self._update_prompt_template()
-        
-        outputs = litellm.batch_completion(
+            
+        #outputs = litellm.batch_completion(
+        kwargs = dict(
             model=self.litellm_model_name, 
             messages=convs_list,
             api_key=self.api_key,
-            temperature=temperature,
-            top_p=top_p,
-            max_tokens=max_n_tokens,
+            temperature=temperature,  #07/21
+            top_p=top_p,   #01/08 removed
+            #max_tokens=max_n_tokens,  #07/21
+            max_completion_tokens=max_n_tokens,  #07/21
             num_retries=self.API_MAX_RETRY,
             seed=0,
-            stop=eos_tokens,
+            stop=eos_tokens,   #01/08 removed
         )
-        responses = [output["choices"][0]["message"].content for output in outputs]
+        try:
+            outputs = litellm.batch_completion(**kwargs)
+        except Exception as e:
+        # 关键：失败也要返回同样长度
+            err = f"{self.API_ERROR_OUTPUT} {type(e).__name__}: {e}"
+            return [err for _ in range(len(convs_list))]
+        responses: list[str] = []
+        for i in range(len(convs_list)):
+            try:
+                out = outputs[i]
+                if hasattr(out, "choices") and out.choices and hasattr(out.choices[0], "message"):
+                    responses.append(out.choices[0].message.content or "")
+                else:
+                    # 关键：异常格式也要 append 占位
+                    responses.append(f"{self.API_ERROR_OUTPUT} Unexpected output format: {out}")
+            except Exception as e:
+                # 关键：任何异常也要 append 占位
+                responses.append(f"{self.API_ERROR_OUTPUT} Parse error: {type(e).__name__}: {e}")
 
         return responses
-    '''
-    def batched_generate(self, convs_list: list[list[dict]], max_n_tokens: int, temperature: float, top_p: float, extra_eos_tokens: list[str] = None) -> list[str]:
-        eos_tokens = self.eos_tokens  # 使用类中定义的 eos_tokens
-        if extra_eos_tokens:
-            eos_tokens.extend(extra_eos_tokens)
+      
+        '''
+        responses = []
+        for i, output in enumerate(outputs):
+            try:
+                # 如果是 liteLLM 的 ModelResponse 类型
+                if hasattr(output, "choices") and hasattr(output.choices[0], "message"):
+                    responses.append(output.choices[0].message.content)
+                else:
+                    print(f"[batched_generate] Unexpected output format at index {i}")
+                    print(f"Prompt: {convs_list[i]}")
+                    print(f"Output: {output}\n")
+            except Exception as e:
+                print(f"[batched_generate] Exception at index {i}")
+                print(f"Prompt: {convs_list[i]}")
+                print(f"Error: {e}\nOutput: {output}\n")
+        return responses
+       '''
 
-        try:
-            outputs = litellm.batch_completion(
-                model=self.litellm_model_name,
-                messages=convs_list,
-                api_key=self.api_key,
-                temperature=temperature,
-                top_p=top_p,
-                max_tokens=max_n_tokens,
-                num_retries=self.API_MAX_RETRY,
-                seed=0,
-                stop=eos_tokens,  # 使用 eos_tokens
-            )
-            responses = [output["choices"][0]["message"].content for output in outputs]
-            return responses
-        except APIError as e:
-            logger.error(f"APIError: {e}")
-            return ["APIError: Failed to generate response."] * len(convs_list)   
-    '''
-
-# class LocalvLLM(LanguageModel):
-    
-#     def __init__(self, model_name: str):
-#         """Initializes the LLMHuggingFace with the specified model name."""
-#         super().__init__(model_name)
-#         if self.model_name not in MODEL_NAMES:
-#             raise ValueError(f"Invalid model name: {model_name}")
-#         self.hf_model_name = HF_MODEL_NAMES[Model(model_name)]
-#         destroy_model_parallel()
-#         self.model = vllm.LLM(model=self.hf_model_name)
-#         if self.temperature > 0:
-#             self.sampling_params = vllm.SamplingParams(
-#                 temperature=self.temperature, top_p=self.top_p, max_tokens=self.max_n_tokens
-#             )
-#         else:
-#             self.sampling_params = vllm.SamplingParams(temperature=0, max_tokens=self.max_n_tokens)
-
-#     def _get_responses(self, prompts_list: list[str], max_new_tokens: int | None = None) -> list[str]:
-#         """Generates responses from the model for the given prompts."""
-#         full_prompt_list = self._prompt_to_conv(prompts_list)
-#         outputs = self.model.generate(full_prompt_list, self.sampling_params)
-#         # Get output from each input, but remove initial space
-#         outputs_list = [output.outputs[0].text[1:] for output in outputs]
-#         return outputs_list
-
-#     def _prompt_to_conv(self, prompts_list):
-#         batchsize = len(prompts_list)
-#         convs_list = [self._init_conv_template() for _ in range(batchsize)]
-#         full_prompts = []
-#         for conv, prompt in zip(convs_list, prompts_list):
-#             conv.append_message(conv.roles[0], prompt)
-#             conv.append_message(conv.roles[1], None)
-#             full_prompt = conv.get_prompt()
-#             # Need this to avoid extraneous space in generation
-#             if "llama-2-7b-chat-hf" in self.model_name:
-#                 full_prompt += " "
-#             full_prompts.append(full_prompt)
-#         return full_prompts
-
-#     def _init_conv_template(self):
-#         template = get_conversation_template(self.hf_model_name)
-#         if "llama" in self.hf_model_name:
-#             # Add the system prompt for Llama as FastChat does not include it
-#             template.system_message = """You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.\n\nIf a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."""
-#         return template
     
 
 
-from chatgpt_airsim.airsim_gpt_demo import request_single_step
+from chatgpt_airsim.airsim_gpt_demo import evaluation, single_request,request_single_step
 
 class AirSimModel(LanguageModel):
     def __init__(self, model_name):
         super().__init__(model_name)
         self.model_name = model_name
 
+
+    def _generate_response(self, prompt: str) -> str:
+        # 调用 airsim_gpt_demo.py 的逻辑
+        code = request_single_step(prompt)
+        print("lkjlkjlkjlkjlkjlkjlkjlkjlkjlllllllkkkkkkkkkkkkkkkkkkkkkkkkkkk")
+        print(code)
+        print("ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss")
+        print(evaluation(code))
+        return code
+    
     def batched_generate(self, convs_list: list[list[dict]], max_n_tokens: int, temperature: float, top_p: float, extra_eos_tokens: list[str] = None) -> list[str]:
         responses = []
         for conv in convs_list:
@@ -175,7 +152,3 @@ class AirSimModel(LanguageModel):
             response = self._generate_response(user_input)
             responses.append(response)
         return responses
-
-    def _generate_response(self, prompt: str) -> str:
-        # 调用 airsim_gpt_demo.py 的逻辑
-        return request_single_step(prompt, self.model_name)

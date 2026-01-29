@@ -15,13 +15,15 @@ class Model(Enum):
     gpt_3_5 = "gpt-3.5-turbo-1106"
     gpt_4 = "gpt-4-0125-preview"
     gpt_4o = "gpt-4o"  # Added
-    gpt_o4_mini = "gpt-o4-mini"  # Added
-    gpt_o3 = "gpt-o3"  # Added
+    gpt_4o_mini = "gpt-4o-mini"  # Added
+    o4_mini = "o4-mini"  # Added
+    gpt_5_mini = "gpt-5-mini"  # Added
     claude_1 = "claude-instant-1.2"
     claude_2 = "claude-2.1"
     gemini = "gemini-pro"
     mixtral = "mixtral"
     airsim = "airsim"   # ry added
+    benchmark = "gpt-4o-mini"  # ry added for benchmark judge
 
 MODEL_NAMES = [model.value for model in Model]
 
@@ -39,26 +41,29 @@ TOGETHER_MODEL_NAMES: dict[Model, str] = {
 }
 
 FASTCHAT_TEMPLATE_NAMES: dict[Model, str] = {
-    Model.gpt_3_5: "gpt-3.5-turbo",
+    Model.gpt_3_5: "gpt-3.5-turbo-1106",
     Model.gpt_4: "gpt-4",
     Model.gpt_4o: "gpt-4o",
-    Model.gpt_o4_mini: "gpt-o4mini",
-    Model.gpt_o3: "gpt-03",
+    Model.gpt_4o_mini: "gpt-4o-mini",
+    Model.o4_mini: "o4-mini",
+    Model.gpt_5_mini: "gpt-5-mini",  # Added
     Model.claude_1: "claude-instant-1.2",
     Model.claude_2: "claude-2.1",
     Model.gemini: "gemini-pro",
     Model.vicuna: "vicuna_v1.1",
     Model.llama_2: "llama-2-7b-chat-hf",
     Model.mixtral: "mixtral",
-    Model.airsim: "gpt-4o", # ry added
+    Model.airsim: "airsim", # ry added
+    Model.benchmark: "gpt-4o-mini"  # ry added for benchmark judge
 }
 
 API_KEY_NAMES: dict[Model, str] = {
     Model.gpt_3_5:  "OPENAI_API_KEY",
     Model.gpt_4:    "OPENAI_API_KEY",
     Model.gpt_4o: "OPENAI_API_KEY",
-    Model.gpt_o4_mini: "OPENAI_API_KEY",
-    Model.gpt_o3: "OPENAI_API_KEY",
+    Model.gpt_4o_mini: "OPENAI_API_KEY",
+    Model.o4_mini: "OPENAI_API_KEY",
+    Model.gpt_5_mini: "OPENAI_API_KEY",
     Model.claude_1: "ANTHROPIC_API_KEY",
     Model.claude_2: "ANTHROPIC_API_KEY",
     Model.gemini:   "GEMINI_API_KEY",
@@ -66,6 +71,7 @@ API_KEY_NAMES: dict[Model, str] = {
     Model.llama_2:  "TOGETHER_API_KEY",
     Model.mixtral:  "TOGETHER_API_KEY",
     Model.airsim:  "OPENAI_API_KEY",  # ry added
+    Model.benchmark: "OPENAI_API_KEY"  # ry added for benchmark judge
 
 }
 

@@ -1,7 +1,7 @@
 from common import get_api_key, conv_template, extract_json
 from language_models import APILiteLLM, AirSimModel # ry added
 from config import FASTCHAT_TEMPLATE_NAMES, Model
-
+#from system_prompts import ry_prompt
 
 def load_attack_and_target_models(args):
     # create attack model and target model
@@ -22,22 +22,10 @@ def load_attack_and_target_models(args):
     return attackLM, targetLM
 
 def load_indiv_model(model_name, local = False, use_jailbreakbench=True):
-    if use_jailbreakbench and Model(model_name) != Model.airsim: # ry added
-        if local:
-            from jailbreakbench import LLMvLLM
-            lm = LLMvLLM(model_name=model_name)
-        else:
-            from jailbreakbench import LLMLiteLLM
-            api_key = get_api_key(Model(model_name))
-            lm = LLMLiteLLM(model_name= model_name, api_key = api_key)
-    else:
-        if local:
-            raise NotImplementedError
-        else:
-            if Model(model_name) == Model.airsim: # ry added
-                lm = AirSimModel(model_name)# ry added
-            else:# ry added
-                lm = APILiteLLM(model_name)
+    if Model(model_name) == Model.airsim: # ry added
+        lm = AirSimModel(model_name)# ry added
+    else:# ry added
+        lm = APILiteLLM(model_name)
     return lm
 
 class AttackLM():
@@ -67,6 +55,7 @@ class AttackLM():
                                       local = evaluate_locally, 
                                       use_jailbreakbench=False # Cannot use JBB as attacker
                                       )
+        print('attackLM use model_name: ',model_name)
         self.initialize_output = self.model.use_open_source_model
         self.template = FASTCHAT_TEMPLATE_NAMES[self.model_name]
 
@@ -85,6 +74,7 @@ class AttackLM():
             if self.initialize_output:
                 conv.append_message(conv.roles[1], init_message)
         openai_convs_list = [conv.to_openai_api_messages() for conv in convs_list]
+        
         return openai_convs_list, init_message
         
     def _generate_attack(self, openai_conv_list: list[list[dict]], init_message: str):
@@ -92,59 +82,58 @@ class AttackLM():
         indices_to_regenerate = list(range(batchsize))
         valid_outputs = [None] * batchsize
         new_adv_prompts = [None] * batchsize
+
+        use_extra_eos = self.evaluate_locally  # 只在本地模型使用额外的停止标记
         
         # Continuously generate outputs until all are valid or max_n_attack_attempts is reached
         for attempt in range(self.max_n_attack_attempts):
             # Subset conversations based on indices to regenerate
             convs_subset = [openai_conv_list[i] for i in indices_to_regenerate]
+
+            # 准备生成参数
+            generate_kwargs = {
+                "max_n_tokens": self.max_n_tokens,
+                "temperature": self.temperature,
+                "top_p": self.top_p,
+            }
+            # 只在必要时添加extra_eos_tokens
+            if use_extra_eos:
+                generate_kwargs["extra_eos_tokens"] = ["}"]
+
             # Generate outputs 
-            outputs_list = self.model.batched_generate(convs_subset,
-                                                        max_n_tokens = self.max_n_tokens,  
-                                                        temperature = self.temperature,
-                                                        top_p = self.top_p,
-                                                        extra_eos_tokens=["}"]
-                                                    )
+            outputs_list = self.model.batched_generate(convs_subset,**generate_kwargs)
             
             # Check for valid outputs and update the list
             new_indices_to_regenerate = []
             for i, full_output in enumerate(outputs_list):
                 orig_index = indices_to_regenerate[i]
                 full_output = init_message + full_output + "}" # Add end brace since we terminate generation on end braces
+                #print(f"//////////////////fffffffffffffffffffffff////////////////////////Attempt {attempt+1}, Output {i+1}: {full_output}")
                 attack_dict, json_str = extract_json(full_output)
                 if attack_dict is not None:
                     valid_outputs[orig_index] = attack_dict
                     new_adv_prompts[orig_index] = json_str
                 else:
                     new_indices_to_regenerate.append(orig_index)
-            
+                #print(f"Attempt {attempt+1}, Output {i+1}: {full_output}")
             # Update indices to regenerate for the next iteration
             indices_to_regenerate = new_indices_to_regenerate
             # If all outputs are valid, break
             if not indices_to_regenerate:
                 break
-
+        #print("*********valid_outputs**********",valid_outputs)
         if any([output is None for output in valid_outputs]):
             raise ValueError(f"Failed to generate valid output after {self.max_n_attack_attempts} attempts. Terminating.")
         return valid_outputs, new_adv_prompts
 
     def get_attack(self, convs_list, prompts_list):
-        """
-        Generates responses for a batch of conversations and prompts using a language model. 
-        Only valid outputs in proper JSON format are returned. If an output isn't generated 
-        successfully after max_n_attack_attempts, it's returned as None.
         
-        Parameters:
-        - convs_list: List of conversation objects.
-        - prompts_list: List of prompts corresponding to each conversation.
-        
-        Returns:
-        - List of generated outputs (dictionaries) or None for failed generations.
-        """
         assert len(convs_list) == len(prompts_list), "Mismatch between number of conversations and prompts."
         
         # Convert conv_list to openai format and add the initial message
         processed_convs_list, init_message = self.preprocess_conversation(convs_list, prompts_list)
         valid_outputs, new_adv_prompts = self._generate_attack(processed_convs_list, init_message)
+        
 
         for jailbreak_prompt, conv in zip(new_adv_prompts, convs_list):
             # For open source models, we can seed the generation with proper JSON and omit the post message
@@ -178,36 +167,23 @@ class TargetLM():
         self.temperature = TARGET_TEMP
         self.top_p = TARGET_TOP_P
 
-        self.model = load_indiv_model(model_name, evaluate_locally, use_jailbreakbench)            
+        self.model = load_indiv_model(model_name, evaluate_locally, use_jailbreakbench) 
+        print('targetLM use model_name: ',model_name)           
         self.category = category
 
     def get_response(self, prompts_list):
-        if self.use_jailbreakbench:
+        if self.use_jailbreakbench and Model(self.model_name) != Model.airsim:  
+            
             llm_response = self.model.query(prompts = prompts_list, 
                                 behavior = self.category, 
                                 phase = self.phase,
                                 max_new_tokens=self.max_n_tokens)
             responses = llm_response.responses
         else:
-            # ry added start
             if Model(self.model_name) == Model.airsim:
+                
                 responses = []
                 for prompt in prompts_list:
-                    response = self.model.generate_response(prompt)
+                    response = self.model._generate_response(prompt)
                     responses.append(response)
-            else:
-            #ry added done
-                batchsize = len(prompts_list)
-                convs_list = [conv_template(self.template) for _ in range(batchsize)]
-                full_prompts = []
-                for conv, prompt in zip(convs_list, prompts_list):
-                    conv.append_message(conv.roles[0], prompt)
-                    full_prompts.append(conv.to_openai_api_messages())
-
-                responses = self.model.batched_generate(full_prompts, 
-                                                                max_n_tokens = self.max_n_tokens,  
-                                                                temperature = self.temperature,
-                                                                top_p = self.top_p
-                                                            )
-            
         return responses

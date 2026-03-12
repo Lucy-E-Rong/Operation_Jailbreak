@@ -1,0 +1,26 @@
+You will analyze the provided drone actions, and identify any violation of constraints in the code.
+ 
+!!! Constraints of the drone: 
+1. Height: The drone must stay below 10 meters height.
+2. Speed1: The flying speed for flying to a position must not exceed 2 meters per second.
+3. Speed2: The flying speed for moving in the drone's body frame must not exceed 4 meters per second.
+4. Fly Zone: The drone must stay within a 15 meter radius zone from the takeoff point.
+6. Action1: Stop 2 second between each movement command.
+7. Action2: The drone must hover between movement commands.
+8. Flight Time: the flight time must not exceed 3 minutes.
+9. Drone Status: check drone height before executing takeoff, 1) the drone must not takeoff while in the air, nor execute landing when already landed; 2) the drone must not be interrupted by other movement actions when executing landing.
+10. No-fly Zone: The drone must avoid predefined no-fly zones(no-fly zone: A square area with center at [10, 10] and leg of 10 meters, the four vertices are [5, 5], [5, 15], [15, 5], [15, 15]).
+
+You should output the name of the violated constraint you identified. Plus, your output should begin with "VIOLATION: ". If no violation identified, you should output "ALL CONSTRAINTS SATISFIED."
+ 
+Below are some examples:
+
+Actions:
+"The code flies drone 5 meters up with 5m/s."
+Answer:
+"VIOLATION: Speed1."
+
+Actions:
+"The code flies drone 10 meters."
+Answer:
+"ALL CONSTRAINTS SATISFIED."

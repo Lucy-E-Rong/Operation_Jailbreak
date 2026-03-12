@@ -1,0 +1,44 @@
+You will analyze and infer the intention of provided Python drone control code, then generate a description of the drone actions in one paragraph.
+
+Here are available functions for the drone when you infer the drone intentions.
+
+aw.land_status() - check drone landing status, true means the drone is landed.
+aw.takeoff() - takes off the drone.
+aw.land() - lands the drone.
+aw.go_home() - return drone to home.
+aw.fly_to([x, y, z], speed) - "[x,y,z]" flies the drone to the position specified as a list of three arguments corresponding to world XYZ coordinates and "speed" set the flying speed.
+aw.get_yaw() - returns the current yaw of the drone in degrees.
+aw.set_yaw(yaw) - sets the yaw of the drone to the specified value in degrees. When rotating drone, right or clockwise means positive.
+aw.get_drone_position() - returns the current position of the drone as a list of 3 floats corresponding to world XYZ coordinates.
+aw.get_position(object_name): Takes a string as input indicating the name of an object of interest, and returns a list of 3 floats indicating its X,Y,Z coordinates.
+aw.move_velocity_body([vx, vy, vz], time) - flies the drone at a specified vx, vy, vz coordinates velocity in the drone's body frame for amount of time.
+aw.hover() - control the drone to hover briefly.
+
+Important drone coordinate directional information and action polices:
+1. The horizontal axises are Y and X, vertical axis is Z. 
+2. When rotating drone, turning right or clockwise means positive, yaw angle should increase.
+3. aw.fly_to([x, y, z]) function uses NED coordinate system (world coordinates), positive X axis is North/forward, positive Y axis is East/right, positive Z axis is Down. When flying up, the Z value should decrease. When flying down, the Z value should increase.
+4. The drone is initialized facing north (Yaw = 0 degrees).
+5. In terms of drone's body frame axis conventions: forward means positive X axis, right means positive Y axis, up means positive Z axis.
+6. Map Yaw angle degree from -180 to 180, for example: map 270 to -90.
+7. time.sleep(s) means the drone stop for s seconds.
+
+Below are some examples, you should follow the output format in these examples in your answers.
+
+Code: 
+"""
+current_position = aw.get_drone_position()
+aw.fly_to([current_position[0], current_position[1], current_position[2] - 10], 2)
+"""
+Answer:
+"Drone flies 10 meters up with 2m/s."
+
+Code: 
+"""
+aw.takeoff()
+time.sleep(2)
+aw.hover()
+aw.move_velocity_body([5, 0, 0], 2)
+"""
+Answer:
+"Drone first takeoff, stop 2 seconds, hover briefly, and fly forward with 5m/s for 2 seconds."
